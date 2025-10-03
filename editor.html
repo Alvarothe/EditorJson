@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Mensagens Avançado</title>
+    <!-- 1. ESTILOS (CSS) -->
+    <style>
+        /* Estilos Gerais */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7f9; color: #333; margin: 0; padding: 20px;
+            padding-right: 180px; /* Espaço para o menu lateral */
+        }
+        .container {
+            max-width: 800px; margin: 0 auto; background-color: #fff;
+            padding: 20px 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        h1 { color: #2c3e50; text-align: center; }
+        p { text-align: center; color: #7f8c8d; }
+
+        /* Barra Lateral Fixa */
+        .sidebar-actions {
+            position: fixed; top: 20px; right: 20px; display: flex;
+            flex-direction: column; gap: 10px; z-index: 1001;
+        }
+        .sidebar-actions .btn {
+            display: flex; align-items: center; justify-content: flex-start;
+            gap: 8px; width: 140px; text-align: left;
+        }
+
+        /* Barra de Busca */
+        .search-container { margin-bottom: 20px; }
+        #searchInput {
+            width: 100%; padding: 12px; border: 1px solid #ccc;
+            border-radius: 5px; font-size: 16px; box-sizing: border-box;
+        }
+
+        /* Botões */
+        .btn {
+            padding: 10px 15px; border: none; border-radius: 5px; font-size: 14px;
+            cursor: pointer; transition: all 0.2s ease;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background-color: #3498db; color: white; }
+        .btn-primary:hover { background-color: #2980b9; }
+        .btn-secondary { background-color: #95a5a6; color: white; }
+        .btn-secondary:hover { background-color: #7f8c8d; }
+        .btn-danger { background-color: #e74c3c; color: white; }
+        .btn-danger:hover { background-color: #c0392b; }
+        .btn-warning { background-color: #f1c40f; color: white; }
+        .btn-warning:hover { background-color: #f39c12; }
+
+        /* Lista de Mensagens e Feedback Visual de Arraste */
+        .message-list { list-style: none; padding: 0; }
+        .message-item {
+            background-color: #ecf0f1; border: 1px solid #bdc3c7; border-radius: 5px;
+            margin-bottom: 10px; overflow: hidden; transition: background-color 0.2s ease;
+        }
+        .message-header {
+            display: flex; justify-content: space-between; align-items: center; padding: 15px;
+            cursor: grab; background-color: #f8f9fa; user-select: none;
+        }
+        .message-header:active { cursor: grabbing; }
+        .message-header h3 { margin: 0; color: #2c3e50; font-size: 18px; }
+        .arrow { font-size: 20px; transition: transform 0.3s ease; }
+        .message-item.expanded .arrow { transform: rotate(90deg); }
+        
+        /* Estilos para o feedback de arrastar */
+        .sortable-chosen { opacity: 0.8; } /* Item que está sendo segurado */
+        .drop-target-highlight { background-color: #f8d7da !important; } /* Alvo onde o item vai cair */
+
+        /* --- NOVOS ESTILOS PARA DIREÇÃO --- */
+        .moving-up { background-color: #d4edda !important; } /* Verde para subir */
+        .moving-down { background-color: #f8d7da !important; } /* Vermelho para descer */
+
+        /* Detalhes do Item */
+        .message-details {
+            max-height: 0; overflow: hidden; transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out;
+            background-color: #fff; padding: 0 20px;
+        }
+        .message-item.expanded .message-details {
+            max-height: 500px; padding: 20px; border-top: 1px solid #bdc3c7;
+        }
+        .message-details p { margin: 0 0 10px; text-align: left; color: #34495e; line-height: 1.6; }
+        .message-details strong { color: #2c3e50; }
+        .details-actions { margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end; }
+
+        /* Notificação Toast */
+        #toast {
+            position: fixed; bottom: -100px; left: 50%; transform: translateX(-50%); padding: 12px 25px;
+            border-radius: 25px; color: white; font-size: 16px; z-index: 2000;
+            transition: bottom 0.5s ease-in-out; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        #toast.show { bottom: 30px; }
+        #toast.success { background-color: #2ecc71; }
+        #toast.error { background-color: #e74c3c; }
+
+        /* Modal e Formulário */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; overflow-y: auto; }
+        .modal-content { background: white; padding: 20px 30px; border-radius: 8px; width: 90%; max-width: 550px; margin: 20px 0;}
+        #messageForm label { display: block; margin-bottom: 5px; font-weight: bold; color: #34495e; }
+        #messageForm input[type="text"], #messageForm input[type="number"], #messageForm textarea { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .checkbox-group { display: flex; align-items: center; margin-bottom: 15px; }
+        .checkbox-group input { margin-right: 10px; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        
+        #jsonTools { border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-top: 20px; }
+        #jsonTools legend { padding: 0 10px; font-weight: bold; color: #34495e; }
+        #jsonTools textarea { height: 120px; font-family: monospace; font-size: 12px; resize: vertical; }
+        .json-buttons { display: flex; gap: 10px; margin-top: 10px; }
+        .json-buttons .btn { flex-grow: 1; }
+
+        .hidden { display: none !important; }
+        .loading { text-align: center; padding: 20px; color: #7f8c8d; font-style: italic; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+</head>
+<body>
+
+    <div class="sidebar-actions">
+        <button id="addBtn" class="btn btn-primary" title="Adicionar Nova Mensagem">➕ Adicionar</button>
+        <button id="copyJsonBtn" class="btn btn-secondary" title="Copiar JSON para Área de Transferência">📋 Copiar</button>
+        <button id="saveFileBtn" class="btn btn-secondary" title="Salvar como arquivo .json">💾 Salvar</button>
+        <button id="loadFileBtn" class="btn btn-secondary" title="Carregar de um arquivo .json">📂 Carregar</button>
+        <input type="file" id="fileInput" accept=".json" style="display: none;">
+        <button id="resetBtn" class="btn btn-warning" title="Descarta alterações e carrega a versão original da internet">🔄 Restaurar</button>
+    </div>
+
+    <div class="container">
+        <h1>Gerenciador de Mensagens</h1>
+        <p>Arraste para reordenar, clique para expandir. Suas alterações são salvas automaticamente.</p>
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Buscar por título ou mensagem...">
+        </div>
+        <ul id="messageList" class="message-list"></ul>
+    </div>
+
+    <div id="modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h2 id="modalTitle">Adicionar Nova Mensagem</h2>
+            <form id="messageForm">
+                <input type="hidden" id="originalId">
+                <label for="idInput">Posição (ID):</label>
+                <input type="number" id="idInput" min="0">
+                <label for="titulo">Título:</label>
+                <input type="text" id="titulo" required>
+                <label for="mensagem">Mensagem:</label>
+                <textarea id="mensagem" rows="3" required></textarea>
+                <label for="servico">Serviço:</label>
+                <input type="text" id="servico" required>
+                <label for="etiqueta">Etiqueta:</label>
+                <input type="text" id="etiqueta" required>
+                <label for="etiqueta_externo">Etiqueta Externa:</label>
+                <input type="text" id="etiqueta_externo" required>
+                <div class="checkbox-group"><input type="checkbox" id="externo"><label for="externo">Externo</label></div>
+                <div class="checkbox-group"><input type="checkbox" id="aguardar"><label for="aguardar">Aguardar</label></div>
+                <fieldset id="jsonTools">
+                    <legend>Importar/Exportar via JSON</legend>
+                    <textarea id="jsonInputArea" placeholder="Cole um objeto JSON aqui e clique em 'Importar' para preencher os campos."></textarea>
+                    <div class="json-buttons">
+                        <button type="button" id="importJsonBtn" class="btn btn-secondary">Importar</button>
+                        <button type="button" id="generateJsonBtn" class="btn btn-secondary">Gerar JSON</button>
+                    </div>
+                </fieldset>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                    <button type="button" id="cancelBtn" class="btn btn-secondary">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const JSON_URL = 'https://raw.githubusercontent.com/Alvarothe/site-tester/refs/heads/main/mensagens.json';
+            const PRELOADED_DATA = [
+                { "titulo": "Desconexão Chat", "mensagem": "...", "externo": false, "aguardar": false, "etiqueta": "Desconexão Chat", "etiqueta_externo": "Desconexão Chat", "servico": "Reparo Físico", "id": 0 },
+                { "titulo": "Desconexão Whatsapp", "mensagem": "...", "externo": false, "aguardar": false, "etiqueta": "Desconexão Whatsapp", "etiqueta_externo": "Desconexão Whatsapp", "servico": "Reparo Físico", "id": 1 },
+                { "titulo": "Falta de sistema", "mensagem": "...", "externo": true, "aguardar": true, "etiqueta": "Sem sistema", "etiqueta_externo": "Sem sistema", "servico": "Reparo Físico", "id": 2 }
+            ];
+
+            const dom = {
+                messageList: document.getElementById('messageList'), addBtn: document.getElementById('addBtn'),
+                copyJsonBtn: document.getElementById('copyJsonBtn'), saveFileBtn: document.getElementById('saveFileBtn'),
+                loadFileBtn: document.getElementById('loadFileBtn'), fileInput: document.getElementById('fileInput'),
+                resetBtn: document.getElementById('resetBtn'), searchInput: document.getElementById('searchInput'),
+                modal: document.getElementById('modal'), modalTitle: document.getElementById('modalTitle'),
+                messageForm: document.getElementById('messageForm'), cancelBtn: document.getElementById('cancelBtn'),
+                toast: document.getElementById('toast'), jsonInputArea: document.getElementById('jsonInputArea'),
+                importJsonBtn: document.getElementById('importJsonBtn'), generateJsonBtn: document.getElementById('generateJsonBtn')
+            };
+
+            let messages = [];
+
+            const saveData = () => localStorage.setItem('savedMessages', JSON.stringify(messages));
+            const updateDataAndRender = () => {
+                messages.forEach((msg, index) => { msg.id = index; });
+                saveData();
+                renderList();
+            };
+
+            function loadInitialData() {
+                const savedMessages = localStorage.getItem('savedMessages');
+                if (savedMessages) { messages = JSON.parse(savedMessages); showToast('Sessão restaurada!', 'success'); }
+                else { messages = PRELOADED_DATA.map((item, index) => ({ ...item, id: item.id ?? index })); showToast('Dados iniciais carregados.', 'success'); }
+                updateDataAndRender();
+            }
+
+            function renderList(messagesToRender = messages) {
+                dom.messageList.innerHTML = '';
+                if (messagesToRender.length === 0) {
+                    dom.messageList.innerHTML = `<li class="loading">Nenhuma mensagem encontrada.</li>`; return;
+                }
+                messagesToRender.forEach(msg => {
+                    const li = document.createElement('li');
+                    li.className = 'message-item'; li.dataset.id = msg.id;
+                    li.innerHTML = `
+                        <div class="message-header"><h3>${msg.titulo}</h3><span class="arrow">▶</span></div>
+                        <div class="message-details">
+                            <p><strong>Mensagem:</strong> ${msg.mensagem}</p>
+                            <p><strong>Serviço:</strong> ${msg.servico}</p>
+                            <p><strong>ID:</strong> ${msg.id}</p>
+                            <div class="details-actions">
+                                <button class="btn btn-secondary edit-btn" data-id="${msg.id}">Editar</button>
+                                <button class="btn btn-danger delete-btn" data-id="${msg.id}">Deletar</button>
+                            </div>
+                        </div>`;
+                    dom.messageList.appendChild(li);
+                });
+            }
+
+            dom.messageList.addEventListener('click', (e) => {
+                if (e.target.closest('.message-header')) e.target.closest('.message-item').classList.toggle('expanded');
+                if (e.target.classList.contains('edit-btn')) openModalForEdit(parseInt(e.target.dataset.id, 10));
+                if (e.target.classList.contains('delete-btn')) {
+                    if (confirm('Tem certeza?')) {
+                        messages = messages.filter(msg => msg.id !== parseInt(e.target.dataset.id, 10));
+                        updateDataAndRender(); showToast('Mensagem deletada.', 'success');
+                    }
+                }
+            });
+
+            // --- LÓGICA DE ARRASTAR ATUALIZADA ---
+            new Sortable(dom.messageList, {
+                animation: 150, handle: '.message-header',
+                onMove: (evt) => {
+                    // Limpa destaques antigos
+                    document.querySelectorAll('.drop-target-highlight').forEach(el => el.classList.remove('drop-target-highlight'));
+                    
+                    // Adiciona destaque no alvo
+                    if (evt.related) evt.related.classList.add('drop-target-highlight');
+                    
+                    // Lógica para colorir o item arrastado
+                    const draggedItem = evt.dragged;
+                    if (evt.newIndex > evt.oldIndex) {
+                        draggedItem.classList.add('moving-down');
+                        draggedItem.classList.remove('moving-up');
+                    } else if (evt.newIndex < evt.oldIndex) {
+                        draggedItem.classList.add('moving-up');
+                        draggedItem.classList.remove('moving-down');
+                    } else {
+                        draggedItem.classList.remove('moving-up', 'moving-down');
+                    }
+                },
+                onUnchoose: (evt) => {
+                    // Limpa todas as classes visuais ao soltar o item
+                    evt.item.classList.remove('moving-up', 'moving-down');
+                    document.querySelectorAll('.drop-target-highlight').forEach(el => el.classList.remove('drop-target-highlight'));
+                },
+                onEnd: (evt) => {
+                    if (evt.oldIndex !== evt.newIndex) {
+                        const [movedItem] = messages.splice(evt.oldIndex, 1);
+                        messages.splice(evt.newIndex, 0, movedItem);
+                        updateDataAndRender();
+                    }
+                },
+                scroll: true, scrollSensitivity: 50, scrollSpeed: 15,
+            });
+
+            const openModalForAdd = () => {
+                dom.modalTitle.textContent = 'Adicionar Nova Mensagem'; dom.messageForm.reset(); dom.jsonInputArea.value = '';
+                dom.messageForm.querySelector('#originalId').value = ''; dom.messageForm.querySelector('#idInput').value = messages.length;
+                dom.messageForm.querySelector('#idInput').disabled = true; dom.messageForm.querySelector('#servico').value = "Reparo Físico";
+                dom.messageForm.querySelector('#externo').checked = false; dom.messageForm.querySelector('#aguardar').checked = false;
+                dom.modal.classList.remove('hidden');
+            };
+
+            const openModalForEdit = (id) => {
+                const msg = messages.find(m => m.id === id); if (!msg) return;
+                dom.modalTitle.textContent = 'Editar Mensagem'; dom.messageForm.reset(); dom.jsonInputArea.value = '';
+                dom.messageForm.querySelector('#originalId').value = id; dom.messageForm.querySelector('#idInput').value = id;
+                dom.messageForm.querySelector('#idInput').disabled = false; dom.messageForm.querySelector('#titulo').value = msg.titulo;
+                dom.messageForm.querySelector('#mensagem').value = msg.mensagem; dom.messageForm.querySelector('#servico').value = msg.servico;
+                dom.messageForm.querySelector('#etiqueta').value = msg.etiqueta; dom.messageForm.querySelector('#etiqueta_externo').value = msg.etiqueta_externo;
+                dom.messageForm.querySelector('#externo').checked = msg.externo; dom.messageForm.querySelector('#aguardar').checked = msg.aguardar;
+                dom.modal.classList.remove('hidden');
+            };
+
+            const closeModal = () => dom.modal.classList.add('hidden');
+            
+            dom.messageForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const originalId = dom.messageForm.querySelector('#originalId').value;
+                const data = {
+                    titulo: dom.messageForm.querySelector('#titulo').value, mensagem: dom.messageForm.querySelector('#mensagem').value,
+                    servico: dom.messageForm.querySelector('#servico').value, etiqueta: dom.messageForm.querySelector('#etiqueta').value,
+                    etiqueta_externo: dom.messageForm.querySelector('#etiqueta_externo').value, externo: dom.messageForm.querySelector('#externo').checked,
+                    aguardar: dom.messageForm.querySelector('#aguardar').checked,
+                };
+                if (originalId) {
+                    const oldIndex = messages.findIndex(m => m.id === parseInt(originalId, 10));
+                    let newIndex = parseInt(dom.messageForm.querySelector('#idInput').value, 10);
+                    const clampedIndex = Math.max(0, Math.min(newIndex, messages.length - 1));
+                    if (clampedIndex !== newIndex) {
+                        showToast(`Posição ajustada para o valor válido: ${clampedIndex}`, 'error'); newIndex = clampedIndex;
+                    }
+                    const item = { ...messages[oldIndex], ...data };
+                    messages.splice(oldIndex, 1); messages.splice(newIndex, 0, item);
+                    showToast('Mensagem atualizada e reordenada!', 'success');
+                } else {
+                    messages.push(data); showToast('Nova mensagem adicionada!', 'success');
+                }
+                closeModal(); updateDataAndRender();
+            });
+            
+            dom.addBtn.addEventListener('click', openModalForAdd);
+            dom.cancelBtn.addEventListener('click', closeModal);
+            dom.modal.addEventListener('click', (e) => { if (e.target === dom.modal) closeModal(); });
+            dom.importJsonBtn.addEventListener('click', () => {
+                try {
+                    const data = JSON.parse(dom.jsonInputArea.value); if (typeof data !== 'object' || data === null) throw new Error('O JSON deve ser um objeto.');
+                    dom.messageForm.querySelector('#titulo').value = data.titulo || ''; dom.messageForm.querySelector('#mensagem').value = data.mensagem || '';
+                    dom.messageForm.querySelector('#servico').value = data.servico || 'Reparo Físico'; dom.messageForm.querySelector('#etiqueta').value = data.etiqueta || '';
+                    dom.messageForm.querySelector('#etiqueta_externo').value = data.etiqueta_externo || ''; dom.messageForm.querySelector('#externo').checked = data.externo === true;
+                    dom.messageForm.querySelector('#aguardar').checked = data.aguardar === true;
+                    showToast('Dados importados do JSON!', 'success');
+                } catch (error) { showToast(`JSON inválido: ${error.message}`, 'error'); }
+            });
+            dom.generateJsonBtn.addEventListener('click', () => {
+                const data = {
+                    titulo: dom.messageForm.querySelector('#titulo').value, mensagem: dom.messageForm.querySelector('#mensagem').value,
+                    servico: dom.messageForm.querySelector('#servico').value, etiqueta: dom.messageForm.querySelector('#etiqueta').value,
+                    etiqueta_externo: dom.messageForm.querySelector('#etiqueta_externo').value, externo: dom.messageForm.querySelector('#externo').checked,
+                    aguardar: dom.messageForm.querySelector('#aguardar').checked,
+                };
+                dom.jsonInputArea.value = JSON.stringify(data, null, 4); showToast('JSON gerado!', 'success');
+            });
+            dom.copyJsonBtn.addEventListener('click', async () => { await navigator.clipboard.writeText(JSON.stringify(messages, null, 4)); showToast('JSON copiado!', 'success'); });
+            dom.saveFileBtn.addEventListener('click', () => {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob([JSON.stringify(messages, null, 4)], { type: 'application/json' }));
+                a.download = 'mensagens.json'; a.click(); URL.revokeObjectURL(a.href);
+                showToast('Arquivo JSON salvo!', 'success');
+            });
+            dom.loadFileBtn.addEventListener('click', () => dom.fileInput.click());
+            dom.fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
+                reader.onload = (re) => { try { messages = JSON.parse(re.target.result); updateDataAndRender(); showToast('Arquivo carregado!', 'success'); } catch (err) { showToast('Erro ao ler arquivo.', 'error'); }};
+                reader.readAsText(file); e.target.value = '';
+            });
+            dom.resetBtn.addEventListener('click', async () => { if (confirm('Descartar alterações e buscar a lista original?')) {
+                try {
+                    dom.messageList.innerHTML = `<li class="loading">Buscando dados...</li>`;
+                    const response = await fetch(JSON_URL); if (!response.ok) throw new Error(`Erro: ${response.statusText}`);
+                    messages = await response.json(); updateDataAndRender(); showToast('Dados restaurados da fonte original!', 'success');
+                } catch (error) { showToast(`Falha ao restaurar: ${error.message}`, 'error'); loadInitialData(); }
+            }});
+            dom.searchInput.addEventListener('input', (e) => { const term = e.target.value.toLowerCase(); renderList(messages.filter(m => m.titulo.toLowerCase().includes(term) || m.mensagem.toLowerCase().includes(term))); });
+            
+            let toastTimer;
+            function showToast(message, type = 'success') {
+                clearTimeout(toastTimer); dom.toast.textContent = message; dom.toast.className = `show ${type}`;
+                toastTimer = setTimeout(() => dom.toast.classList.remove('show'), 3000);
+            }
+
+            loadInitialData();
+        });
+    </script>
+</body>
+</html>
